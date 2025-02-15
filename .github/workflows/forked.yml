@@ -1,29 +1,59 @@
-name: Testing in different Python versions with Tox.
+name: forked.yml
 on:
   push:
     branches:
-      - "*"
+      - main
 
 jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-latest
-
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
       - name: Check directory
         uses: actions/checkout@v2
-
       - uses: actions/setup-python@v2
         with:
-          python-version: "3.8"
-
+          python-version: '3.8'
       - name: Install dependencies
-        run: |
-          make requirements
+        run: 'make requirements
 
-      - name: Tox
-        run: |
-          tox -p auto
-        env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          '
+      - id: measurement-4
+        name: Record Measurement After Install dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Install dependencies
+          task: get-measurement
+      - env:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        name: Tox
+        run: 'tox -p auto
+
+          '
+      - id: measurement-6
+        name: Record Measurement After Tox
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Tox
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json

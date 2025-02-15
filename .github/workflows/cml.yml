@@ -1,52 +1,91 @@
-name: CML train & evaluate model
-
-on: push
+name: cml.yml
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   run:
     runs-on: ubuntu-latest
-
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
       - name: Check directory
         uses: actions/checkout@v2
-
       - uses: iterative/setup-cml@v1
-
       - uses: iterative/setup-dvc@v1
-
       - uses: actions/setup-python@v2
         with:
-          python-version: "3.8"
-
-      - name: cml
-        env:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          python-version: '3.8'
+      - env:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+        name: cml
+        run: 'make requirements
 
-        run: |
-          make requirements
 
           # Reproduce pipeline if any changes detected in dependencies
+
           dvc repro
 
+
           # Use DVC metrics diff to compare metrics to main
+
           git fetch --prune --unshallow
 
+
           echo "## Metrics" > report.md
+
           dvc metrics diff --show-md main >> report.md
 
+
           echo "## Plots" >> report.md
+
           dvc plots diff --target reports/cfm.json --show-vega main > vega0.json
+
           vl2png -s 1.3 vega0.json vega0.png
+
           cml-publish vega0.png --md >> report.md
 
+
           dvc plots diff --target reports/roc.json --show-vega main > vega1.json
+
           vl2png -s 1.3 vega1.json vega1.png
+
           cml-publish vega1.png --md >> report.md
 
+
           dvc plots diff --target reports/prc.json --show-vega main > vega2.json
+
           vl2png -s 1.3 vega2.json vega2.png
+
           cml-publish vega2.png --md >> report.md
 
+
           cml-send-comment --update report.md
+
+          '
+      - id: measurement-6
+        name: Record Measurement After cml
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: cml
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
